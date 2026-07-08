@@ -1,11 +1,17 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from supabase import create_client, Client
 
 # --- SUPABASE SETUP ---
+# Load the hidden variables from the .env file
+load_dotenv()
+
+# Fetch the key securely
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_URL = "https://ofdwlagawlawrfqbgbbq.supabase.co"
-SUPABASE_KEY = "sb_secret_F1YmezDCpcsB-JTYH5CIAA_EuAj07bF"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="FraudFlux API", version="1.0")
