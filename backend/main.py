@@ -1,49 +1,50 @@
 from fastapi import FastAPI
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
+from supabase import create_client, Client
+
+# --- SUPABASE SETUP ---
+SUPABASE_URL = "https://ofdwlagawlawrfqbgbbq.supabase.co"
+SUPABASE_KEY = "sb_secret_F1YmezDCpcsB-JTYH5CIAA_EuAj07bF"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="FraudFlux API", version="1.0")
 
-# 1. The Advanced Pydantic Schema (The strict bouncer)
 class TransactionPayload(BaseModel):
     transaction_id: str
     timestamp: str
-    
-    # Financial Data
-    amount: float = Field(..., gt=0, description="Transaction amount must be greater than 0")
+    amount: float = Field(..., gt=0)
     currency: str
-    
-    # Card Intelligence (Your suggestions!)
-    card_bin: str = Field(..., min_length=6, max_length=8, description="Bank Identification Number")
+    card_bin: str = Field(..., min_length=6, max_length=8)
     issuer_bank_name: str
     issuer_country: str
-    
-    # User / Merchant Context
     merchant_category: str
-    customer_email: EmailStr  # Pydantic will automatically verify it has an @ symbol!
-    
-    # Behavioral / Geo Data
+    customer_email: EmailStr
     billing_country: str
     ip_address: Optional[str] = None
     distance_from_home_km: Optional[float] = None
 
-@app.get("/")
-def read_root():
-    return {"status": "success", "message": "Welcome to the FraudFlux API Engine"}
-
 @app.post("/api/v1/evaluate")
 def evaluate_transaction(payload: TransactionPayload):
     
-    # Example Logic: Basic rule-based check before AI
-    if payload.issuer_country != payload.billing_country:
-        base_risk = 0.50
-    else:
-        base_risk = 0.10
+    # 1. Dummy Logic (Before ML)
+    base_risk = 0.50 if payload.issuer_country != payload.billing_country else 0.10
+    decision = "FLAGGED_FOR_REVIEW" if base_risk > 0.4 else "APPROVED"
+
+    # 2. Prepare data for the database
+    db_record = payload.model_dump() # Converts the Pydantic model to a standard dictionary
+    db_record["risk_score"] = base_risk
+    db_record["decision"] = decision
+
+    # 3. Insert into Supabase
+    try:
+        data, count = supabase.table("transactions").insert(db_record).execute()
+    except Exception as e:
+        return {"error": f"Failed to save to database: {str(e)}"}
         
     return {
-        "message": "Payload parsed successfully",
+        "message": "Transaction evaluated and saved to database!",
         "transaction_id": payload.transaction_id,
-        "amount": payload.amount,
         "risk_score": base_risk,
-        "decision": "FLAGGED_FOR_REVIEW" if base_risk > 0.4 else "APPROVED"
+        "decision": decision
     }

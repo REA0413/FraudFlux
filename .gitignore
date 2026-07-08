@@ -13,3 +13,7 @@ dist/
 ml_pipeline/data/
 *.csv
 *.pkl
+
+# Ignore ML Datasets
+ml_pipeline/data/*.csv
+*.csv
