@@ -92,3 +92,14 @@ def predict_fraud(transaction: Transaction):
     
     # Return the result to the frontend
     return {"is_fraud": int(prediction[0])}
+
+@app.get("/api/v1/transactions")
+def get_transactions():
+    try:
+        # Fetch the latest 50 transactions from Supabase
+        response = supabase.table("transactions").select("*").limit(50).execute()
+        
+        # Return the list of transactions
+        return response.data
+    except Exception as e:
+        return {"error": f"Failed to fetch from database: {str(e)}"}
