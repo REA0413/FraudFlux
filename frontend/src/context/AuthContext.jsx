@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext();
@@ -6,69 +6,106 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
+  const [merchantSettings, setMerchantSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch Merchant Settings from 'merchants' table
+  const fetchMerchantSettings = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('merchants')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching merchant profile:', error.message);
+      } else if (data) {
+        setMerchantSettings(data);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching settings:', err);
+    }
+  };
+
   useEffect(() => {
-    // 1. Get initial session on app load
+    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) fetchMerchantSettings(session.user.id);
       setLoading(false);
     });
 
-    // 2. Listen for auth state changes (login, logout, token refresh)
+    // Listen for auth changes (Login, Logout, Sign Up)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchMerchantSettings(session.user.id);
+      } else {
+        setMerchantSettings(null);
+      }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Login handler
+  // Register New Merchant
+  const register = async (email, password, merchantName) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+
+    if (data.user) {
+      // Create matching row in public.merchants table
+      const { error: profileError } = await supabase
+        .from('merchants')
+        .insert([
+          {
+            id: data.user.id,
+            email: email,
+            merchant_name: merchantName,
+            auto_decline_threshold: 85,
+          },
+        ]);
+
+      if (profileError) {
+        console.error('Failed to create merchant profile row:', profileError.message);
+      }
+    }
+    return data;
+  };
+
+  // Login
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   };
 
-  // Sign up handler
-  const signup = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) throw error;
-    return data;
-  };
-
-  // Logout handler
+  // Logout
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
-  const value = {
-    user,
-    session,
-    loading,
-    login,
-    signup,
-    logout,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        merchantSettings,
+        loading,
+        login,
+        register,
+        logout,
+        fetchMerchantSettings,
+      }}
+    >
+      {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to easily access auth state
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
+export const useAuth = () => useContext(AuthContext);

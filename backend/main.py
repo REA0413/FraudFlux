@@ -55,30 +55,70 @@ class Transaction(BaseModel):
     city_pop: int
     zip: int
 
+# --- Pydantic Schema for Req 5 ---
+class ThresholdUpdateSchema(BaseModel):
+    merchant_id: str
+    auto_decline_threshold: int = Field(
+        ..., 
+        ge=1, 
+        le=99, 
+        description="Threshold percentage between 1 and 99"
+    )
+
 
 # --- ENDPOINTS ---
 
-@app.post("/api/v1/evaluate")
-def evaluate_transaction(payload: TransactionPayload):
-    # 1. Dummy Logic (Before ML)
-    base_risk = 0.50 if payload.issuer_country != payload.billing_country else 0.10
-    decision = "FLAGGED_FOR_REVIEW" if base_risk > 0.4 else "APPROVED"
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+import os
+from supabase import create_client, Client
 
-    # 2. Prepare data for the database
-    db_record = payload.model_dump() 
+# --- Pydantic Schema for Inbound Transactions ---
+class TransactionPayload(BaseModel):
+    transaction_id: str
+    merchant_id: str
+    amount: float
+    currency: str = "EUR"
+    issuer_country: str
+    billing_country: str
+    user_id: Optional[str] = None
+
+@app.post("/v1/charge/evaluate")
+async def evaluate_transaction(payload: TransactionPayload):
+    # 1. Fetch Dynamic Auto-Decline Threshold from 'merchants' table
+    threshold = 85  # Fallback default
+    try:
+        res = supabase.table("merchants").select("auto_decline_threshold").eq("id", payload.merchant_id).execute()
+        if res.data and len(res.data) > 0:
+            threshold = res.data[0]["auto_decline_threshold"]
+    except Exception as e:
+        print(f"Warning: Could not fetch threshold, using default 85. Error: {e}")
+
+    # 2. Compute Risk Score (0 to 100 scale)
+    # (Using rules now; replace 'base_risk' with model.predict_proba() once ML pipeline is loaded)
+    base_risk = 88.0 if payload.issuer_country != payload.billing_country else 15.0
+
+    # 3. Decision Logic against Dynamic Threshold
+    decision = "DECLINE" if base_risk >= threshold else "APPROVE"
+
+    # 4. Save Evaluation Record into Supabase 'transactions' table
+    db_record = payload.model_dump()
     db_record["risk_score"] = base_risk
     db_record["decision"] = decision
 
-    # 3. Insert into Supabase
     try:
-        data, count = supabase.table("transactions").insert(db_record).execute()
+        supabase.table("transactions").insert(db_record).execute()
     except Exception as e:
-        return {"error": f"Failed to save to database: {str(e)}"}
-        
+        print(f"Database error on transaction insert: {str(e)}")
+
+    # 5. Return Evaluation Response
     return {
-        "message": "Transaction evaluated and saved to database!",
+        "status": "success",
         "transaction_id": payload.transaction_id,
+        "merchant_id": payload.merchant_id,
         "risk_score": base_risk,
+        "threshold_applied": threshold,
         "decision": decision
     }
 
@@ -103,3 +143,37 @@ def get_transactions():
         return response.data
     except Exception as e:
         return {"error": f"Failed to fetch from database: {str(e)}"}
+
+
+# --- Endpoint: Update Merchant Threshold (Req 5) ---
+@app.put("/v1/settings/thresholds")
+async def update_merchant_threshold(payload: ThresholdUpdateSchema):
+    try:
+        # Update the merchant's auto_decline_threshold in Supabase
+        response = supabase.table("merchants").update({
+            "auto_decline_threshold": payload.auto_decline_threshold
+        }).eq("id", payload.merchant_id).execute()
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+        return {
+            "status": "success",
+            "message": "Fraud risk threshold updated successfully",
+            "merchant_id": payload.merchant_id,
+            "auto_decline_threshold": payload.auto_decline_threshold
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Endpoint: Fetch Merchant Threshold ---
+@app.get("/v1/settings/thresholds/{merchant_id}")
+async def get_merchant_threshold(merchant_id: str):
+    try:
+        response = supabase.table("merchants").select("auto_decline_threshold").eq("id", merchant_id).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Merchant not found")
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

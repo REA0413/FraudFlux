@@ -3,11 +3,13 @@ import Dashboard from './Dashboard';
 import Login from './Login'; // Import Login component
 import { useAuth } from './context/AuthContext'; // Import useAuth hook
 import LandingPage from './LandingPage';
+import Register from './Register';
+import MerchantSettings from './MerchantSettings';
 
 export default function App() {
   const { user, logout, loading } = useAuth(); // Auth state
 
-  const [authView, setAuthView] = useState('landing'); // 'landing' or 'login'
+  const [authView, setAuthView] = useState('landing');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
 
@@ -82,6 +84,20 @@ export default function App() {
       );
     }
 
+    if (authView === 'register') {
+      return (
+        <div className="relative">
+          <button
+            onClick={() => setAuthView('landing')}
+            className="absolute top-6 left-6 text-white text-sm hover:underline z-10 bg-white/10 px-3 py-1.5 rounded-lg backdrop-blur-md"
+          >
+            ← Back to Home
+          </button>
+          <Register onSwitchToLogin={() => setAuthView('login')} />
+        </div>
+      );
+    }
+
     return <LandingPage onNavigate={(view) => setAuthView(view)} />;
   }
 
@@ -112,7 +128,7 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden">
         
-        {/* Sidebar */}
+        {/* Sidebar Navigation */}
         <aside className="w-64 bg-white border-r border-gray-200 p-6 shrink-0 flex flex-col">
           <h2 className="text-xl font-bold mb-6 text-gray-800">Menu</h2>
           <nav className="space-y-2 text-sm font-medium flex-1">
@@ -120,7 +136,7 @@ export default function App() {
               onClick={() => setActiveTab('dashboard')} 
               className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-[#E8DEF8] text-[#21005D] border-l-4 border-[#6750A4]' : 'text-gray-600 hover:bg-gray-50 hover:text-[#6750A4]'}`}
             >
-              Overview (Figma UI)
+              Overview
             </button>
             <button 
               onClick={() => setActiveTab('operations')} 
@@ -128,14 +144,25 @@ export default function App() {
             >
               Operations Desk
             </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'settings' ? 'bg-[#E8DEF8] text-[#21005D] border-l-4 border-[#6750A4]' : 'text-gray-600 hover:bg-gray-50 hover:text-[#6750A4]'}`}
+            >
+              Risk Controls
+            </button>
           </nav>
         </aside>
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
-          {activeTab === 'dashboard' ? (
+
+          {/* TAB 1: OVERVIEW / DASHBOARD */}
+          {activeTab === 'dashboard' && (
             <Dashboard transactions={transactions} />
-          ) : (
+          )}
+
+          {/* TAB 2: OPERATIONS DESK */}
+          {activeTab === 'operations' && (
             <div className="p-10 max-w-6xl mx-auto">
               <h1 className="text-2xl font-bold mb-6 text-[#21005D]">Operations Desk</h1>
               
@@ -210,6 +237,14 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* TAB 3: RISK CONTROLS (SETTINGS) */}
+          {activeTab === 'settings' && (
+            <div className="p-10 max-w-6xl mx-auto">
+              <MerchantSettings />
+            </div>
+          )}
+
         </main>
       </div>
     </div>
