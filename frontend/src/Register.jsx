@@ -41,9 +41,9 @@ export default function Register({ onSwitchToLogin }) {
 
         {success ? (
           <div className="rounded-md bg-green-50 p-4 text-green-800 text-center space-y-3">
-            <p className="font-semibold text-base">Account Created Successfully! 🎉</p>
+            <p className="font-semibold text-base">Thank you! Account Created Successfully! 🎉</p>
             <p className="text-xs text-gray-600">
-              Check your email for confirmation (if enabled in Supabase), or sign in directly now.
+              Please check your inbox and click on the verification link to start working with FraudFlux.
             </p>
             <button
               onClick={onSwitchToLogin}

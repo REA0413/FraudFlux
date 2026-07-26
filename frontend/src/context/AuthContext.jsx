@@ -54,26 +54,18 @@ export const AuthProvider = ({ children }) => {
 
   // Register New Merchant
   const register = async (email, password, merchantName) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          merchant_name: merchantName, // Send metadata to Supabase Auth
+        },
+      },
+    });
+
     if (error) throw error;
 
-    if (data.user) {
-      // Create matching row in public.merchants table
-      const { error: profileError } = await supabase
-        .from('merchants')
-        .insert([
-          {
-            id: data.user.id,
-            email: email,
-            merchant_name: merchantName,
-            auto_decline_threshold: 85,
-          },
-        ]);
-
-      if (profileError) {
-        console.error('Failed to create merchant profile row:', profileError.message);
-      }
-    }
     return data;
   };
 

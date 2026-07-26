@@ -1,61 +1,53 @@
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+import io
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, EmailStr, Field
 from supabase import create_client, Client
 import joblib
 import pandas as pd
 
 # --- SUPABASE SETUP ---
-# Load the hidden variables from the .env file
 load_dotenv()
-
-# Fetch the key securely
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_URL = "https://ofdwlagawlawrfqbgbbq.supabase.co"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Declare the app exactly ONE time
+# --- FASTAPI APP SETUP ---
 app = FastAPI(title="FraudFlux API", version="1.0")
 
-# --- CORS CONFIGURATION ---
-# This allows your React frontend to talk to this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (good for local development)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- AI MODEL SETUP ---
-# Load the AI Model into memory when the server starts
 model = joblib.load("xgboost_fraud_model.joblib")
 
 
-# --- SCHEMAS (What data we expect) ---
+# --- PYDANTIC SCHEMAS ---
 class TransactionPayload(BaseModel):
     transaction_id: str
-    timestamp: str
-    amount: float = Field(..., gt=0)
-    currency: str
-    card_bin: str = Field(..., min_length=6, max_length=8)
-    issuer_bank_name: str
+    merchant_id: str
+    amount: float
+    currency: str = "EUR"
     issuer_country: str
-    merchant_category: str
-    customer_email: EmailStr
     billing_country: str
-    ip_address: Optional[str] = None
-    distance_from_home_km: Optional[float] = None
+    user_id: Optional[str] = None
 
 class Transaction(BaseModel):
     amt: float
     city_pop: int
     zip: int
 
-# --- Pydantic Schema for Req 5 ---
 class ThresholdUpdateSchema(BaseModel):
     merchant_id: str
     auto_decline_threshold: int = Field(
@@ -68,26 +60,11 @@ class ThresholdUpdateSchema(BaseModel):
 
 # --- ENDPOINTS ---
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-import os
-from supabase import create_client, Client
-
-# --- Pydantic Schema for Inbound Transactions ---
-class TransactionPayload(BaseModel):
-    transaction_id: str
-    merchant_id: str
-    amount: float
-    currency: str = "EUR"
-    issuer_country: str
-    billing_country: str
-    user_id: Optional[str] = None
-
+# 1. Charge Evaluation with ML Model & Dynamic Threshold (Req 5)
 @app.post("/v1/charge/evaluate")
 async def evaluate_transaction(payload: TransactionPayload):
-    # 1. Fetch Dynamic Auto-Decline Threshold from 'merchants' table
-    threshold = 85  # Fallback default
+    # Fetch Dynamic Auto-Decline Threshold from 'merchants' table
+    threshold = 85
     try:
         res = supabase.table("merchants").select("auto_decline_threshold").eq("id", payload.merchant_id).execute()
         if res.data and len(res.data) > 0:
@@ -95,14 +72,24 @@ async def evaluate_transaction(payload: TransactionPayload):
     except Exception as e:
         print(f"Warning: Could not fetch threshold, using default 85. Error: {e}")
 
-    # 2. Compute Risk Score (0 to 100 scale)
-    # (Using rules now; replace 'base_risk' with model.predict_proba() once ML pipeline is loaded)
-    base_risk = 88.0 if payload.issuer_country != payload.billing_country else 15.0
+    # Compute Risk Score with XGBoost Model
+    try:
+        feature_dict = {
+            "amount": payload.amount,
+            "issuer_country": payload.issuer_country,
+            "billing_country": payload.billing_country,
+        }
+        input_df = pd.DataFrame([feature_dict])
+        fraud_probability = model.predict_proba(input_df)[0][1]
+        base_risk = round(float(fraud_probability * 100), 2)
+    except Exception as e:
+        print(f"Warning: ML model inference failed ({e}). Using rule-based fallback.")
+        base_risk = 88.0 if payload.issuer_country != payload.billing_country else 15.0
 
-    # 3. Decision Logic against Dynamic Threshold
+    # Decision Logic
     decision = "DECLINE" if base_risk >= threshold else "APPROVE"
 
-    # 4. Save Evaluation Record into Supabase 'transactions' table
+    # Save to Supabase 'transactions'
     db_record = payload.model_dump()
     db_record["risk_score"] = base_risk
     db_record["decision"] = decision
@@ -112,7 +99,6 @@ async def evaluate_transaction(payload: TransactionPayload):
     except Exception as e:
         print(f"Database error on transaction insert: {str(e)}")
 
-    # 5. Return Evaluation Response
     return {
         "status": "success",
         "transaction_id": payload.transaction_id,
@@ -122,34 +108,26 @@ async def evaluate_transaction(payload: TransactionPayload):
         "decision": decision
     }
 
+# 2. Legacy Predict Route
 @app.post("/predict")
 def predict_fraud(transaction: Transaction):
-    # Convert the incoming JSON data into a format the AI understands (Pandas DataFrame)
     data = pd.DataFrame([transaction.model_dump()])
-    
-    # Ask the AI to make a prediction (0 for Normal, 1 for Fraud)
     prediction = model.predict(data)
-    
-    # Return the result to the frontend
     return {"is_fraud": int(prediction[0])}
 
+# 3. Get Transactions List
 @app.get("/api/v1/transactions")
 def get_transactions():
     try:
-        # Fetch the latest 50 transactions from Supabase
         response = supabase.table("transactions").select("*").limit(50).execute()
-        
-        # Return the list of transactions
         return response.data
     except Exception as e:
         return {"error": f"Failed to fetch from database: {str(e)}"}
 
-
-# --- Endpoint: Update Merchant Threshold (Req 5) ---
+# 4. Update Merchant Threshold (Req 5)
 @app.put("/v1/settings/thresholds")
 async def update_merchant_threshold(payload: ThresholdUpdateSchema):
     try:
-        # Update the merchant's auto_decline_threshold in Supabase
         response = supabase.table("merchants").update({
             "auto_decline_threshold": payload.auto_decline_threshold
         }).eq("id", payload.merchant_id).execute()
@@ -166,8 +144,7 @@ async def update_merchant_threshold(payload: ThresholdUpdateSchema):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# --- Endpoint: Fetch Merchant Threshold ---
+# 5. Fetch Merchant Threshold
 @app.get("/v1/settings/thresholds/{merchant_id}")
 async def get_merchant_threshold(merchant_id: str):
     try:
@@ -177,3 +154,42 @@ async def get_merchant_threshold(merchant_id: str):
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 6. CSV Export Endpoint (Req 6)
+@app.get("/v1/transactions/export")
+async def export_transactions_csv(merchant_id: str, days: int = 30):
+    try:
+        cutoff_time = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        res = (
+            supabase.table("transactions")
+            .select("*")
+            .eq("merchant_id", merchant_id)
+            .gte("created_at", cutoff_time)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        transactions = res.data or []
+
+        if not transactions:
+            df = pd.DataFrame(columns=[
+                "transaction_id", "merchant_id", "amount", "currency", 
+                "issuer_country", "billing_country", "risk_score", "decision", "created_at"
+            ])
+        else:
+            df = pd.DataFrame(transactions)
+
+        stream = io.StringIO()
+        df.to_csv(stream, index=False)
+        stream.seek(0)
+
+        filename = f"fraudflux_report_{days}d.csv"
+        return StreamingResponse(
+            iter([stream.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate CSV export: {str(e)}")

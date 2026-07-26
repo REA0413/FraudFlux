@@ -1,14 +1,61 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+// Import useAuth to access authenticated merchant user session (Req 6)
+import { useAuth } from './context/AuthContext';
 
 // 1. Accept the transactions prop we just passed from App.jsx
 export default function Dashboard({ transactions = [] }) {
+  // Access logged-in user context
+  const { user } = useAuth();
   
+  // State for CSV export date filter and loading state (Req 6)
+  const [days, setDays] = useState(30);
+  const [downloading, setDownloading] = useState(false);
+
   // 2. Format the data slightly so Recharts can easily read it
   const chartData = transactions.map(tx => ({
     name: tx.transaction_id,
     amount: tx.amount
   }));
+
+  // CSV Export Handler Function for Requirement 6
+  const handleExportCSV = async () => {
+    if (!user?.id) {
+      alert("Merchant session not found. Please sign in again.");
+      return;
+    }
+
+    setDownloading(true);
+
+    try {
+      // Fetch transaction CSV stream from FastAPI backend
+      const response = await fetch(
+        `http://localhost:8000/v1/transactions/export?merchant_id=${user.id}&days=${days}`
+      );
+
+      if (!response.ok) throw new Error('Failed to generate export report.');
+
+      // Step 1: Convert response stream into a downloadable file Blob
+      const blob = await response.blob();
+      
+      // Step 2: Create a temporary in-memory Object URL for browser download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fraudflux_report_${days}d.csv`;
+
+      // Step 3: Programmatically click the link to trigger download and cleanup memory
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Error exporting CSV report.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="p-10 bg-white flex-1 overflow-y-auto text-gray-900 font-sans">
@@ -16,11 +63,29 @@ export default function Dashboard({ transactions = [] }) {
         
         {/* Section 1: Fraud */}
         <section>
-          <div className="flex justify-between items-end mb-6">
+          <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Fraud</h1>
-            <button className="text-[#6750A4] text-sm font-medium flex items-center hover:underline">
-              Download report overview
-            </button>
+
+            {/* CSV Export Date Selector and Download Button Controls (Req 6) */}
+            <div className="flex items-center gap-3">
+              <select
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+                className="p-1.5 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#6750A4]"
+              >
+                <option value={7}>Last 7 Days</option>
+                <option value={30}>Last 30 Days</option>
+                <option value={90}>Last 90 Days</option>
+              </select>
+
+              <button
+                onClick={handleExportCSV}
+                disabled={downloading}
+                className="text-[#6750A4] text-sm font-medium flex items-center hover:underline disabled:opacity-50"
+              >
+                {downloading ? 'Downloading...' : 'Download report overview (CSV)'}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-8 mb-6">

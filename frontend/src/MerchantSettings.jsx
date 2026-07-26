@@ -7,7 +7,7 @@ export default function MerchantSettings() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-// Load current threshold from Supabase / Backend on load
+  // Load current threshold from Supabase / Backend on load
   useEffect(() => {
     const fetchThreshold = async () => {
       try {
@@ -28,8 +28,8 @@ export default function MerchantSettings() {
     }
   }, [user]);
 
-  const handleSave = async (newThreshold) => {
-    const valToSave = newThreshold !== undefined ? newThreshold : threshold;
+  // Unified Save Handler (Runs ONLY on "Save Settings" click)
+  const handleSave = async () => {
     setLoading(true);
     setMessage(null);
 
@@ -39,7 +39,7 @@ export default function MerchantSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           merchant_id: user.id,
-          auto_decline_threshold: Number(valToSave)
+          auto_decline_threshold: Number(threshold)
         }),
       });
 
@@ -53,6 +53,11 @@ export default function MerchantSettings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectPreset = (val) => {
+    setThreshold(val);
+    setMessage(null); // Clear previous alert so user knows changes are staged
   };
 
   return (
@@ -79,7 +84,7 @@ export default function MerchantSettings() {
         </label>
         <div className="grid grid-cols-3 gap-3">
           <button
-            onClick={() => { setThreshold(70); handleSave(70); }}
+            onClick={() => selectPreset(70)}
             className={`p-3 border rounded-lg text-left transition ${
               threshold === 70 ? 'border-purple-600 bg-purple-50 dark:bg-slate-700' : 'border-slate-300'
             }`}
@@ -89,7 +94,7 @@ export default function MerchantSettings() {
           </button>
 
           <button
-            onClick={() => { setThreshold(85); handleSave(85); }}
+            onClick={() => selectPreset(85)}
             className={`p-3 border rounded-lg text-left transition ${
               threshold === 85 ? 'border-purple-600 bg-purple-50 dark:bg-slate-700' : 'border-slate-300'
             }`}
@@ -99,7 +104,7 @@ export default function MerchantSettings() {
           </button>
 
           <button
-            onClick={() => { setThreshold(95); handleSave(95); }}
+            onClick={() => selectPreset(95)}
             className={`p-3 border rounded-lg text-left transition ${
               threshold === 95 ? 'border-purple-600 bg-purple-50 dark:bg-slate-700' : 'border-slate-300'
             }`}
@@ -123,7 +128,10 @@ export default function MerchantSettings() {
           min="1"
           max="99"
           value={threshold}
-          onChange={(e) => setThreshold(Number(e.target.value))}
+          onChange={(e) => {
+            setThreshold(Number(e.target.value));
+            setMessage(null);
+          }}
           className="w-full accent-purple-600 cursor-pointer"
         />
         <div className="flex justify-between text-xs text-slate-400 mt-1">
@@ -133,7 +141,7 @@ export default function MerchantSettings() {
       </div>
 
       <button
-        onClick={() => handleSave()}
+        onClick={handleSave}
         disabled={loading}
         className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition disabled:opacity-50"
       >
