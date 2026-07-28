@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
@@ -60,11 +60,18 @@ class ThresholdUpdateSchema(BaseModel):
 
 # --- ENDPOINTS ---
 
-# 1. Charge Evaluation with ML Model & Dynamic Threshold (Req 5)
+# Helper function to save transaction records in the background
+def save_transaction_log(db_record: dict):
+    try:
+        supabase.table("transactions").insert(db_record).execute()
+    except Exception as e:
+        print(f"Database error on background insert: {str(e)}")
+
+
 @app.post("/v1/charge/evaluate")
-async def evaluate_transaction(payload: TransactionPayload):
-    # Fetch Dynamic Auto-Decline Threshold from 'merchants' table
-    threshold = 85
+async def evaluate_transaction(payload: TransactionPayload, background_tasks: BackgroundTasks):
+    # 1. Fetch Dynamic Auto-Decline Threshold from 'merchants' table
+    threshold = 85  # Fallback default
     try:
         res = supabase.table("merchants").select("auto_decline_threshold").eq("id", payload.merchant_id).execute()
         if res.data and len(res.data) > 0:
@@ -72,7 +79,7 @@ async def evaluate_transaction(payload: TransactionPayload):
     except Exception as e:
         print(f"Warning: Could not fetch threshold, using default 85. Error: {e}")
 
-    # Compute Risk Score with XGBoost Model
+    # 2. Compute ML Risk Score using XGBoost Model
     try:
         feature_dict = {
             "amount": payload.amount,
@@ -86,19 +93,17 @@ async def evaluate_transaction(payload: TransactionPayload):
         print(f"Warning: ML model inference failed ({e}). Using rule-based fallback.")
         base_risk = 88.0 if payload.issuer_country != payload.billing_country else 15.0
 
-    # Decision Logic
+    # 3. Decision Logic against Dynamic Threshold
     decision = "DECLINE" if base_risk >= threshold else "APPROVE"
 
-    # Save to Supabase 'transactions'
+    # 4. Schedule Asynchronous Database Write in Background
     db_record = payload.model_dump()
     db_record["risk_score"] = base_risk
     db_record["decision"] = decision
+    
+    background_tasks.add_task(save_transaction_log, db_record)
 
-    try:
-        supabase.table("transactions").insert(db_record).execute()
-    except Exception as e:
-        print(f"Database error on transaction insert: {str(e)}")
-
+    # 5. Return Evaluation Response Immediately (No blocking DB write delay!)
     return {
         "status": "success",
         "transaction_id": payload.transaction_id,
