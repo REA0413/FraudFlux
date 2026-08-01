@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Outer Protection Shield -->
+  <path d="M50 8L15 22V48C15 69.5 30 88.5 50 94C70 88.5 85 69.5 85 48V22L50 8Z" fill="#21005D"/>
+  
+  <!-- Inner Dynamic Gradient Layer -->
+  <path d="M50 14L20 26V48C20 65 32.5 80.5 50 85.5C67.5 80.5 80 65 80 48V26L50 14Z" fill="#6750A4"/>
+  
+  <!-- Sub-50ms Real-Time Flux Lightning Symbol -->
+  <path d="M54 26L32 52H48L44 74L68 46H52L54 26Z" fill="#E8DEF8"/>
+</svg>

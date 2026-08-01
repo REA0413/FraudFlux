@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export default function CheckoutSimulator() {
   // Extract user and session token from AuthContext
-  const auth = typeof useAuth === 'function' ? useAuth() : null;
+  const auth = useAuth();
   const userEmail = auth?.user?.email || null;
   const userToken = auth?.session?.access_token || auth?.token || null;
 

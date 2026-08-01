@@ -1,24 +1,37 @@
 import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-// Import useAuth to access authenticated merchant user session (Req 6)
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend 
+} from 'recharts';
 import { useAuth } from './context/AuthContext';
 
-// 1. Accept the transactions prop we just passed from App.jsx
 export default function Dashboard({ transactions = [] }) {
-  // Access logged-in user context
   const { user } = useAuth();
   
-  // State for CSV export date filter and loading state (Req 6)
   const [days, setDays] = useState(30);
   const [downloading, setDownloading] = useState(false);
 
-  // 2. Format the data slightly so Recharts can easily read it
+  // 1. Format Bar Chart Data (Transaction Volume)
   const chartData = transactions.map(tx => ({
     name: tx.transaction_id,
     amount: tx.amount
   }));
 
-  // CSV Export Handler Function for Requirement 6
+  // 2. Calculate Dynamic Pie Chart Data from Live Database Records
+  const totalCount = transactions.length;
+  const approvedCount = transactions.filter(
+    (tx) => tx.decision && tx.decision.toUpperCase() === 'APPROVE'
+  ).length;
+  const declinedCount = transactions.filter(
+    (tx) => tx.decision && tx.decision.toUpperCase() === 'DECLINE'
+  ).length;
+
+  const pieData = [
+    { name: 'Approved', value: approvedCount, color: '#10B981' }, // Emerald Green
+    { name: 'Declined', value: declinedCount, color: '#EF4444' }  // Crimson Red
+  ];
+
+  // CSV Export Handler
   const handleExportCSV = async () => {
     if (!user?.id) {
       alert("Merchant session not found. Please sign in again.");
@@ -28,23 +41,18 @@ export default function Dashboard({ transactions = [] }) {
     setDownloading(true);
 
     try {
-      // Fetch transaction CSV stream from FastAPI backend
       const response = await fetch(
         `http://localhost:8000/v1/transactions/export?merchant_id=${user.id}&days=${days}`
       );
 
       if (!response.ok) throw new Error('Failed to generate export report.');
 
-      // Step 1: Convert response stream into a downloadable file Blob
       const blob = await response.blob();
-      
-      // Step 2: Create a temporary in-memory Object URL for browser download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `fraudflux_report_${days}d.csv`;
 
-      // Step 3: Programmatically click the link to trigger download and cleanup memory
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -61,12 +69,11 @@ export default function Dashboard({ transactions = [] }) {
     <div className="p-10 bg-white flex-1 overflow-y-auto text-gray-900 font-sans">
       <div className="max-w-5xl mx-auto space-y-12">
         
-        {/* Section 1: Fraud */}
+        {/* Section 1: Fraud Overview Header & Top KPIs */}
         <section>
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Fraud</h1>
 
-            {/* CSV Export Date Selector and Download Button Controls (Req 6) */}
             <div className="flex items-center gap-3">
               <select
                 value={days}
@@ -88,6 +95,7 @@ export default function Dashboard({ transactions = [] }) {
             </div>
           </div>
 
+          {/* Historical Network Benchmarks (Static) */}
           <div className="grid grid-cols-3 gap-8 mb-6">
             <div>
               <div className="flex items-center text-sm font-medium text-gray-700 mb-1">
@@ -109,8 +117,8 @@ export default function Dashboard({ transactions = [] }) {
             </div>
           </div>
           
-          {/* 3. The New Dynamic Chart! */}
-          <div className="border border-gray-100 rounded-lg p-6 h-72 bg-white shadow-sm">
+          {/* Dynamic Bar Chart: Transaction Volume by ID */}
+          <div className="border border-gray-100 rounded-lg p-6 h-72 bg-white shadow-sm mb-8">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Transaction Volume by ID</h3>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
@@ -126,15 +134,73 @@ export default function Dashboard({ transactions = [] }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Dynamic Decision Status Pie Chart & Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center border border-gray-100 rounded-xl p-6 bg-gray-50/50 shadow-sm">
+            
+            {/* Pie Chart Column (Spans 2 columns) */}
+            <div className="md:col-span-2 h-64">
+              <h3 className="text-sm font-bold text-gray-800 mb-2">Live Decision Status Breakdown</h3>
+              <p className="text-xs text-gray-500 mb-4">Real-time ratio of approved vs. declined transactions recorded in your database.</p>
+              
+              <ResponsiveContainer width="100%" height="80%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value) => [`${value} Transactions`, 'Count']}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Quick Stat Summary Cards Column */}
+            <div className="space-y-3 border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-6">
+              <div className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm">
+                <span className="text-xs text-gray-500 block">Total Recorded</span>
+                <span className="text-xl font-extrabold text-gray-900">{totalCount} Transactions</span>
+              </div>
+
+              <div className="bg-emerald-50/60 p-3.5 rounded-lg border border-emerald-200 shadow-sm">
+                <span className="text-xs text-emerald-700 block font-semibold">Approved Count</span>
+                <span className="text-xl font-extrabold text-emerald-700">
+                  {approvedCount} <span className="text-xs font-normal">({totalCount > 0 ? ((approvedCount / totalCount) * 100).toFixed(0) : 0}%)</span>
+                </span>
+              </div>
+
+              <div className="bg-red-50/60 p-3.5 rounded-lg border border-red-200 shadow-sm">
+                <span className="text-xs text-red-700 block font-semibold">Declined Count</span>
+                <span className="text-xl font-extrabold text-red-700">
+                  {declinedCount} <span className="text-xs font-normal">({totalCount > 0 ? ((declinedCount / totalCount) * 100).toFixed(0) : 0}%)</span>
+                </span>
+              </div>
+            </div>
+
+          </div>
         </section>
 
         <hr className="border-gray-200" />
 
-        {/* Section 2: Fraud Prevention (Kept exactly as it was) */}
+        {/* Section 2: Fraud Prevention Overview */}
         <section>
           <div className="mb-6">
-            <h2 className="text-xl font-bold">Fraud prevention</h2>
-            <p className="text-sm text-gray-600 mt-1">Understand trends in the volume of transactions blocked by the system. <a href="#" className="text-[#6750A4] hover:underline">Learn more</a></p>
+            <h2 className="text-xl font-bold">Fraud Prevention</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Understand trends in the volume of transactions blocked by the system.
+            </p>
           </div>
 
           <div className="grid grid-cols-4 gap-6 mb-8">

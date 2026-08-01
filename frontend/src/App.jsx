@@ -112,9 +112,12 @@ export default function App() {
       
       {/* Top Navigation Bar */}
       <header className="bg-[#21005D] text-white h-14 flex items-center justify-between px-6 shrink-0 shadow-md">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-full bg-[#E8DEF8] text-[#21005D] flex items-center justify-center font-bold text-sm">FF</div>
-          <span className="font-semibold text-lg tracking-wide">Fraud Flux</span>
+        <div 
+            onClick={() => setActiveTab('dashboard')}
+            className="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity"
+            title="Return to Dashboard Overview"
+          >
+            <span className="font-semibold text-lg tracking-wide">FraudFlux</span>
         </div>
 
         {/* User Info & Logout Button */}

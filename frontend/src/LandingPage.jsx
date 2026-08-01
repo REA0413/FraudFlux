@@ -10,9 +10,6 @@ export default function LandingPage({ onNavigate }) {
           className="flex items-center space-x-3 cursor-pointer"
           onClick={() => onNavigate('landing')}
         >
-          <div className="w-9 h-9 rounded-full bg-[#6750A4] flex items-center justify-center font-bold text-lg text-white">
-            FF
-          </div>
           <span className="text-xl font-bold tracking-tight">FraudFlux</span>
         </div>
 
