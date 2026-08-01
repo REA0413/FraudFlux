@@ -5,12 +5,20 @@
             "framework": "vite"
         },
         "backend": {
-            "root": "backend"
+            "root": "backend",
+            "entrypoint": "main.py"
         }
     },
     "rewrites": [
         {
-            "source": "/api(/.*)?",
+            "source": "/v1/(.*)",
+            "destination": {
+                "type": "service",
+                "service": "backend"
+            }
+        },
+        {
+            "source": "/api/(.*)",
             "destination": {
                 "type": "service",
                 "service": "backend"
