@@ -3,33 +3,16 @@
         "frontend": {
             "root": "frontend",
             "framework": "vite"
-        },
-        "backend": {
-            "root": "backend",
-            "entrypoint": "main.py"
         }
     },
     "rewrites": [
         {
             "source": "/v1/(.*)",
-            "destination": {
-                "type": "service",
-                "service": "backend"
-            }
+            "destination": "https://fraudflux.onrender.com/v1/$1"
         },
         {
             "source": "/api/(.*)",
-            "destination": {
-                "type": "service",
-                "service": "backend"
-            }
-        },
-        {
-            "source": "/(.*)",
-            "destination": {
-                "type": "service",
-                "service": "frontend"
-            }
+            "destination": "https://fraudflux.onrender.com/api/$1"
         }
     ]
 }
