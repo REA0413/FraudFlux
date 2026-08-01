@@ -41,7 +41,12 @@ class TransactionPayload(BaseModel):
     currency: str = "EUR"
     issuer_country: str
     billing_country: str
-    user_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    card_bin: Optional[str] = None
+    issuer_bank_name: Optional[str] = None
+    timestamp: Optional[str] = None
+    zip: Optional[int] = 90210            # Added optional ZIP Code
+    city_pop: Optional[int] = 50000        # Added optional City Population
 
 class Transaction(BaseModel):
     amt: float
@@ -79,31 +84,55 @@ async def evaluate_transaction(payload: TransactionPayload, background_tasks: Ba
     except Exception as e:
         print(f"Warning: Could not fetch threshold, using default 85. Error: {e}")
 
-    # 2. Compute ML Risk Score using XGBoost Model
+    # 2. Hybrid Risk Computation (XGBoost ML Score + Contextual Heuristics)
     try:
-        feature_dict = {
-            "amount": payload.amount,
-            "issuer_country": payload.issuer_country,
-            "billing_country": payload.billing_country,
-        }
-        input_df = pd.DataFrame([feature_dict])
-        fraud_probability = model.predict_proba(input_df)[0][1]
-        base_risk = round(float(fraud_probability * 100), 2)
+        # Feed actual/passed numerical features directly into XGBoost
+        input_df = pd.DataFrame([{
+            "amt": payload.amount,
+            "city_pop": payload.city_pop if payload.city_pop is not None else 50000,
+            "zip": payload.zip if payload.zip is not None else 90210
+        }])
+        
+        # Pure ML Model Probability (e.g. 0.08)
+        ml_probability = float(model.predict_proba(input_df)[0][1])
+
+        # Heuristic Risk Adjustments based on checkout context
+        risk_modifier = 0.0
+
+        # Factor A: Billing / Issuer Geo-Mismatch (+25%)
+        if payload.issuer_country != payload.billing_country:
+            risk_modifier += 0.25
+
+        # Factor B: High-Risk / Disposable Email Domain (+20%)
+        disposable_domains = ['temp-mail.org', 'mailinator.com', 'throwaway.net', 'bot']
+        if payload.customer_email and any(d in payload.customer_email.lower() for d in disposable_domains):
+            risk_modifier += 0.20
+
+        # Factor C: High-Risk Issuer Country (+15%)
+        high_risk_countries = ['NG', 'RU', 'KP', 'IR']
+        if payload.issuer_country in high_risk_countries:
+            risk_modifier += 0.15
+
+        # Combine ML base score with contextual heuristic modifiers
+        combined_score = ml_probability + risk_modifier
+        base_risk = round(min(max(combined_score, 0.02), 0.98), 4)
+
     except Exception as e:
-        print(f"Warning: ML model inference failed ({e}). Using rule-based fallback.")
-        base_risk = 88.0 if payload.issuer_country != payload.billing_country else 15.0
+        print(f"Warning: Model inference error ({e}). Using rule-based fallback.")
+        base_risk = 0.88 if payload.issuer_country != payload.billing_country else 0.15
 
     # 3. Decision Logic against Dynamic Threshold
-    decision = "DECLINE" if base_risk >= threshold else "APPROVE"
+    decision = "DECLINE" if (base_risk * 100) >= threshold else "APPROVE"
 
     # 4. Schedule Asynchronous Database Write in Background
     db_record = payload.model_dump()
     db_record["risk_score"] = base_risk
     db_record["decision"] = decision
+    db_record["threshold_applied"] = threshold
     
     background_tasks.add_task(save_transaction_log, db_record)
 
-    # 5. Return Evaluation Response Immediately (No blocking DB write delay!)
+    # 5. Return Evaluation Response Immediately
     return {
         "status": "success",
         "transaction_id": payload.transaction_id,
@@ -129,7 +158,7 @@ def get_transactions():
     except Exception as e:
         return {"error": f"Failed to fetch from database: {str(e)}"}
 
-# 4. Update Merchant Threshold (Req 5)
+# 4. Update Merchant Threshold
 @app.put("/v1/settings/thresholds")
 async def update_merchant_threshold(payload: ThresholdUpdateSchema):
     try:
@@ -160,7 +189,7 @@ async def get_merchant_threshold(merchant_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 6. CSV Export Endpoint (Req 6)
+# 6. CSV Export Endpoint
 @app.get("/v1/transactions/export")
 async def export_transactions_csv(merchant_id: str, days: int = 30):
     try:

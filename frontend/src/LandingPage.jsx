@@ -6,20 +6,32 @@ export default function LandingPage({ onNavigate }) {
       
       {/* Top Navigation Bar */}
       <nav className="flex items-center justify-between px-8 py-5 border-b border-white/10 max-w-7xl mx-auto w-full">
-        <div className="flex items-center space-x-3">
+        <div 
+          className="flex items-center space-x-3 cursor-pointer"
+          onClick={() => onNavigate('landing')}
+        >
           <div className="w-9 h-9 rounded-full bg-[#6750A4] flex items-center justify-center font-bold text-lg text-white">
             FF
           </div>
           <span className="text-xl font-bold tracking-tight">FraudFlux</span>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Pricing Link */}
+          <button
+            onClick={() => onNavigate('pricing')}
+            className="text-sm font-medium text-gray-300 hover:text-white px-3 py-2 transition-colors"
+          >
+            Pricing
+          </button>
+          
           <button
             onClick={() => onNavigate('login')}
-            className="text-sm font-medium text-gray-300 hover:text-white px-4 py-2 transition-colors"
+            className="text-sm font-medium text-gray-300 hover:text-white px-3 py-2 transition-colors"
           >
             Sign In
           </button>
+
           <button
             onClick={() => onNavigate('register')}
             className="text-sm font-medium bg-[#6750A4] hover:bg-[#533f85] text-white px-5 py-2.5 rounded-lg shadow-lg transition-all"
@@ -36,11 +48,11 @@ export default function LandingPage({ onNavigate }) {
         </span>
         
         <h1 className="text-4xl text-gray-200 sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">
-          Real-Time Transaction Fraud Detection
+          Real-Time Transaction<br/>Fraud Detection
         </h1>
 
         <p className="text-lg text-gray-300 mb-10 max-w-2xl leading-relaxed">
-          FraudFlux leverages Machine Learning and real-time database streaming to identify high-risk payments, mitigate financial fraud, and empower operations desk analysts instantly.
+          FraudFlux leverages Machine Learning and real-time database streaming to identify high-risk payments, mitigate financial fraud, and empower operations analysis.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -56,14 +68,14 @@ export default function LandingPage({ onNavigate }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 text-left w-full">
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm">
             <h3 className="font-bold text-lg mb-2 text-[#e0d7f5]">⚡ Instant ML Scoring</h3>
-            <p className="text-sm text-gray-400">Evaluate transaction amounts, zip codes, and population density using automated XGBoost predictions.</p>
+            <p className="text-sm text-gray-400">Evaluate transaction amounts, zip codes, and population density using automated XGBoost model.</p>
           </div>
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm">
             <h3 className="font-bold text-lg mb-2 text-[#e0d7f5]">📊 Live Dashboard</h3>
             <p className="text-sm text-gray-400">Track key merchant transaction metrics, risk distributions, and live flag statuses effortlessly.</p>
           </div>
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-sm">
-            <h3 className="font-bold text-lg mb-2 text-[#e0d7f5]">🔒 Supabase Backed</h3>
+            <h3 className="font-bold text-lg mb-2 text-[#e0d7f5]">🔒 Secure Data Handle</h3>
             <p className="text-sm text-gray-400">Enterprise-grade secure row-level security and authentication provided by Supabase.</p>
           </div>
         </div>

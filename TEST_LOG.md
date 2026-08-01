@@ -39,4 +39,16 @@
 ---
 
 ## 3. End-to-End UI Tests (Playwright)
-*(Pending Execution)*
+
+* **Date Executed:** July 29, 2026
+* **Browser Engine:** Chromium (Desktop)
+* **Frontend Target:** `http://localhost:5173`
+
+### Results Summary
+| Test Case Name | Flow Tested | Execution Time | Status |
+| :--- | :--- | :---: | :---: |
+| `should load login page properly` | Route assertion & authentication UI modal flow | 3.8s | **PASSED** |
+| `should navigate to merchant settings...` | Settings panel loading & threshold state render | 4.1s | **PASSED** |
+| `should load the dashboard view` | Main operations dashboard DOM rendering | < 1.0s | **PASSED** |
+
+**Total:** 3 Passed / 0 Failed (**100% Pass Rate**)

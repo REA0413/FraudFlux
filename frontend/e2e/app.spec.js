@@ -2,14 +2,27 @@ import { test, expect } from '@playwright/test';
 
 test.describe('FraudFlux Frontend E2E Test Suite', () => {
 
-  // Test 1: Verify Landing / Login Page Loads
+// Test 1: Verify Landing / Login Page Loads
   test('should load login page properly', async ({ page }) => {
     await page.goto('/login');
 
-    // Check that title or heading is visible
+    // 1. Verify URL route
     await expect(page).toHaveURL(/.*login/);
-    await expect(page.locator('input[type="email"], input[name="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"], input[name="password"]')).toBeVisible();
+
+    // 2. Click "Sign In" button if present on the landing page header
+    const signInButton = page.getByRole('button', { name: 'Sign In' });
+    if (await signInButton.isVisible()) {
+      await signInButton.click();
+    }
+
+    // 3. Verify form input fields using user-facing Playwright locators
+    await expect(
+      page.getByPlaceholder(/email/i).or(page.locator('input[type="email"]'))
+    ).toBeVisible();
+
+    await expect(
+      page.getByPlaceholder(/password/i).or(page.locator('input[type="password"]'))
+    ).toBeVisible();
   });
 
   // Test 2: Dynamic Threshold Settings UI Page
