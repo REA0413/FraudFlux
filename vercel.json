@@ -1,18 +1,17 @@
 {
-    "services": {
-        "frontend": {
-            "root": "frontend",
-            "framework": "vite"
-        }
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/v1/(.*)",
+      "destination": "https://fraudflux.onrender.com/v1/$1"
     },
-    "rewrites": [
-        {
-            "source": "/v1/(.*)",
-            "destination": "https://fraudflux.onrender.com/v1/$1"
-        },
-        {
-            "source": "/api/(.*)",
-            "destination": "https://fraudflux.onrender.com/api/$1"
-        }
-    ]
+    {
+      "source": "/api/(.*)",
+      "destination": "https://fraudflux.onrender.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
