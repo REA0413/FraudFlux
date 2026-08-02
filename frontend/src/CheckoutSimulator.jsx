@@ -22,7 +22,7 @@ export default function CheckoutSimulator() {
   const [email, setEmail] = useState('john.doe@gmail.com');
   const [issuerCountry, setIssuerCountry] = useState('US');
   const [billingCountry, setBillingCountry] = useState('US');
-  const [currency] = useState('EUR');
+  const [currency] = useState('USD');
 
   // Advanced ML Parameter States
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -170,7 +170,7 @@ export default function CheckoutSimulator() {
     const startTime = performance.now();
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/v1/charge/evaluate', {
+      const response = await fetch('https://fraudflux.onrender.com/api/v1/charge/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

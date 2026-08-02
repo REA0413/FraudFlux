@@ -11,7 +11,7 @@ export default function MerchantSettings() {
   useEffect(() => {
     const fetchThreshold = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/v1/settings/thresholds/${user.id}`);
+        const res = await fetch(`https://fraudflux.onrender.com/api/v1/settings/thresholds/${user.id}`);
         if (res.ok) {
           const data = await res.json();
           if (data?.auto_decline_threshold) {
@@ -34,7 +34,7 @@ export default function MerchantSettings() {
     setMessage(null);
 
     try {
-      const res = await fetch('http://localhost:8000/v1/settings/thresholds', {
+      const res = await fetch('https://fraudflux.onrender.com/api/v1/settings/thresholds', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
