@@ -8,6 +8,31 @@ import MerchantSettings from './MerchantSettings';
 import CheckoutSimulator from './CheckoutSimulator';
 import Pricing from './Pricing';
 
+// Helper function to format Supabase ISO/Timestamp strings
+// Example: "2026-08-01 22:27:13.164768" -> "01 AUG 2026 22:27:13.16"
+const formatEvaluationDate = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  try {
+    const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+    const date = new Date(isoStr);
+    if (isNaN(date.getTime())) return dateStr;
+
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const month = monthNames[date.getUTCMonth()];
+    const year = date.getUTCFullYear();
+
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    const millis = String(date.getUTCMilliseconds()).padStart(3, '0').slice(0, 2);
+
+    return `${day} ${month} ${year} ${hours}:${minutes}:${seconds}.${millis}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 export default function App() {
   const { user, logout, loading } = useAuth(); // Auth state
 
@@ -19,6 +44,10 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDecision, setFilterDecision] = useState('ALL'); // 'ALL' | 'APPROVE' | 'DECLINE'
   const [selectedTxModal, setSelectedTxModal] = useState(null); // Selected transaction object for inspection modal
+
+  // --- OPERATIONS DESK PAGINATION STATE ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10); // Default items per page
 
   // Fetch the live database data
   useEffect(() => {
@@ -36,6 +65,11 @@ export default function App() {
     fetchTransactions();
   }, [user]);
 
+  // Reset to page 1 whenever search term or decision filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterDecision]);
+
   // Filter transactions based on search term & decision selection
   const filteredTransactions = transactions.filter((tx) => {
     const matchesSearch =
@@ -48,6 +82,12 @@ export default function App() {
 
     return matchesSearch && matchesDecision;
   });
+
+  // --- COMPUTE PAGINATED DATA SLICE ---
+  const totalRecords = filteredTransactions.length;
+  const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + pageSize);
 
   // 1. Show Loading State while Supabase checks session
   if (loading) {
@@ -186,7 +226,7 @@ export default function App() {
             <div className="p-10 max-w-6xl mx-auto space-y-8">
               <h1 className="text-2xl font-bold text-[#21005D]">Operations Desk</h1>
 
-              {/* --- DATABASE TRANSACTIONS TABLE WITH SEARCH & FILTER --- */}
+              {/* --- DATABASE TRANSACTIONS TABLE WITH SEARCH, FILTER & PAGINATION --- */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -236,42 +276,46 @@ export default function App() {
                 </div>
 
                 {/* Table View */}
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <div className="overflow-x-auto rounded-t-lg border border-gray-200">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-[#E8DEF8] text-[#21005D]">
                       <tr>
-                        <th className="p-4 font-semibold">Transaction ID</th>
-                        <th className="p-4 font-semibold">User Email</th>
-                        <th className="p-4 font-semibold">Amount</th>
-                        <th className="p-4 font-semibold">Risk Score</th>
-                        <th className="p-4 font-semibold">Decision</th>
-                        <th className="p-4 font-semibold text-right">Action</th>
+                        <th className="p-4 font-semibold text-center">Evaluation Date</th>
+                        <th className="p-4 font-semibold text-center">Transaction ID</th>
+                        <th className="p-4 font-semibold text-center">User Email</th>
+                        <th className="p-4 font-semibold text-center">Amount</th>
+                        <th className="p-4 font-semibold text-center">Risk Score</th>
+                        <th className="p-4 font-semibold text-center">Decision</th>
+                        <th className="p-4 font-semibold text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredTransactions.map((tx, index) => {
+                      {paginatedTransactions.map((tx, index) => {
                         const isDecline = tx.decision && tx.decision.toUpperCase() === 'DECLINE';
                         return (
                           <tr
                             key={tx.transaction_id || index}
                             onClick={() => setSelectedTxModal(tx)}
-                            className="border-b border-gray-100 hover:bg-purple-50/50 cursor-pointer transition-colors"
+                            className="border-b border-gray-100 hover:bg-purple-50/50 cursor-pointer transition-colors text-center"
                           >
-                            <td className="p-4 font-medium text-[#6750A4]">{tx.transaction_id}</td>
-                            <td className="p-4 text-gray-700">{tx.customer_email}</td>
-                            <td className="p-4 text-gray-700">${tx.amount?.toFixed(2)}</td>
+                            <td className="p-4 text-xs font-mono text-gray-600 whitespace-nowrap text-center">
+                              {formatEvaluationDate(tx.created_at)}
+                            </td>
+                            <td className="p-4 font-medium text-[#6750A4] text-center">{tx.transaction_id}</td>
+                            <td className="p-4 text-gray-700 text-center">{tx.customer_email}</td>
+                            <td className="p-4 text-gray-700 text-center">${tx.amount?.toFixed(2)}</td>
                             <td className="p-4">
-                              <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${tx.risk_score >= 0.5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              <span className={`px-2.5 py-1 rounded-md text-xs text-center font-bold ${tx.risk_score >= 0.5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                 {tx.risk_score}
                               </span>
                             </td>
                             <td className="p-4 font-bold">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs ${isDecline ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-center ${isDecline ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${isDecline ? 'bg-red-600' : 'bg-emerald-600'}`} />
                                 {tx.decision}
                               </span>
                             </td>
-                            <td className="p-4 text-right">
+                            <td className="p-4 text-center">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -286,9 +330,9 @@ export default function App() {
                         );
                       })}
 
-                      {filteredTransactions.length === 0 && (
+                      {paginatedTransactions.length === 0 && (
                         <tr>
-                          <td colSpan="6" className="p-12 text-center text-gray-500">
+                          <td colSpan="7" className="p-12 text-center text-gray-500">
                             {transactions.length === 0
                               ? 'Loading live transaction data...'
                               : 'No transactions match your search or filter criteria.'}
@@ -297,6 +341,55 @@ export default function App() {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* --- PAGINATION TOOLBAR --- */}
+                <div className="bg-gray-50 px-4 py-3 border border-t-0 border-gray-200 rounded-b-lg flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+                  <div className="flex items-center space-x-3">
+                    {/* Page Controls */}
+                    <div className="flex items-center border border-gray-300 rounded-md bg-white shadow-sm overflow-hidden">
+                      <button
+                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-2.5 py-1 hover:bg-gray-100 disabled:opacity-40 border-r border-gray-200 font-bold transition-colors"
+                        title="Previous Page"
+                      >
+                        ←
+                      </button>
+                      <span className="px-3 py-1 font-medium text-gray-700">
+                        Page <span className="font-bold text-gray-900">{currentPage}</span> of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-2.5 py-1 hover:bg-gray-100 disabled:opacity-40 border-l border-gray-200 font-bold transition-colors"
+                        title="Next Page"
+                      >
+                        →
+                      </button>
+                    </div>
+
+                    {/* Rows Per Page Selector */}
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="border border-gray-300 rounded-md bg-white px-2 py-1 font-medium focus:outline-none focus:ring-1 focus:ring-[#6750A4] transition-colors"
+                    >
+                      <option value={10}>10 rows</option>
+                      <option value={25}>25 rows</option>
+                      <option value={50}>50 rows</option>
+                      <option value={100}>100 rows</option>
+                      <option value={500}>500 rows</option>
+                    </select>
+                  </div>
+
+                  {/* Total Records Display */}
+                  <div className="font-semibold text-gray-700">
+                    {totalRecords} records
+                  </div>
                 </div>
 
               </div>
@@ -347,7 +440,7 @@ export default function App() {
             {/* Modal Body */}
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               
-              {/* Summary Bar (Updated to 4 Columns) */}
+              {/* Summary Bar */}
               <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 text-center">
                 <div>
                   <span className="text-xs text-gray-500 block">Amount</span>

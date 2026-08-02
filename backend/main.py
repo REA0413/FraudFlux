@@ -153,7 +153,7 @@ def predict_fraud(transaction: Transaction):
 @app.get("/api/v1/transactions")
 def get_transactions():
     try:
-        response = supabase.table("transactions").select("*").limit(50).execute()
+        response = supabase.table("transactions").select("*").execute()
         return response.data
     except Exception as e:
         return {"error": f"Failed to fetch from database: {str(e)}"}
