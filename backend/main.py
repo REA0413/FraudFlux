@@ -45,8 +45,8 @@ class TransactionPayload(BaseModel):
     card_bin: Optional[str] = None
     issuer_bank_name: Optional[str] = None
     timestamp: Optional[str] = None
-    zip: Optional[int] = 90210            # Added optional ZIP Code
-    city_pop: Optional[int] = 50000        # Added optional City Population
+    zip: Optional[int] = 90210            # Optional ZIP Code
+    city_pop: Optional[int] = 50000        # Optional City Population
 
 class Transaction(BaseModel):
     amt: float
@@ -93,7 +93,7 @@ async def evaluate_transaction(payload: TransactionPayload, background_tasks: Ba
             "zip": payload.zip if payload.zip is not None else 90210
         }])
         
-        # Pure ML Model Probability (e.g. 0.08)
+        # Pure ML Model Probability
         ml_probability = float(model.predict_proba(input_df)[0][1])
 
         # Heuristic Risk Adjustments based on checkout context
@@ -149,11 +149,18 @@ def predict_fraud(transaction: Transaction):
     prediction = model.predict(data)
     return {"is_fraud": int(prediction[0])}
 
-# 3. Get Transactions List
+# 3. Get Transactions List (UPDATED FOR MULTI-TENANT FILTERING)
 @app.get("/api/v1/transactions")
-def get_transactions():
+def get_transactions(merchant_id: Optional[str] = None):
     try:
-        response = supabase.table("transactions").select("*").execute()
+        query = supabase.table("transactions").select("*")
+        
+        # If merchant_id is passed, filter database records specifically for that merchant
+        if merchant_id:
+            query = query.eq("merchant_id", merchant_id)
+            
+        # Execute query ordered by newest records first
+        response = query.order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         return {"error": f"Failed to fetch from database: {str(e)}"}

@@ -45,17 +45,22 @@ export default function App() {
   const [filterDecision, setFilterDecision] = useState('ALL'); // 'ALL' | 'APPROVE' | 'DECLINE'
   const [selectedTxModal, setSelectedTxModal] = useState(null); // Selected transaction object for inspection modal
 
+  // --- OPERATIONS DESK SORTING STATE ---
+  const [sortColumn, setSortColumn] = useState('created_at'); // Default sort column: Evaluation Date
+  const [sortDirection, setSortDirection] = useState('desc');  // Default sort direction: Descending (Newest first)
+
   // --- OPERATIONS DESK PAGINATION STATE ---
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // Default items per page
 
-  // Fetch the live database data
+  // Fetch live database data for the logged-in merchant
   useEffect(() => {
     if (!user) return; // Only fetch if user is logged in
     
     const fetchTransactions = async () => {
       try {
-        const response = await fetch('https://fraudflux.onrender.com/api/v1/transactions');
+        // Appended merchant_id to filter API results per authenticated merchant
+        const response = await fetch(`https://fraudflux.onrender.com/api/v1/transactions?merchant_id=${user.id}`);
         const data = await response.json();
         if (Array.isArray(data)) setTransactions(data);
       } catch (error) {
@@ -65,10 +70,22 @@ export default function App() {
     fetchTransactions();
   }, [user]);
 
-  // Reset to page 1 whenever search term or decision filter changes
+  // Reset to page 1 whenever search, filter, or sort configuration changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterDecision]);
+  }, [searchTerm, filterDecision, sortColumn, sortDirection]);
+
+  // Handle column header sorting click
+  const handleSort = (columnKey) => {
+    if (sortColumn === columnKey) {
+      // Toggle sort direction if clicking the active column
+      setSortDirection((prevDir) => (prevDir === 'desc' ? 'asc' : 'desc'));
+    } else {
+      // Set new active column with default descending direction
+      setSortColumn(columnKey);
+      setSortDirection('desc');
+    }
+  };
 
   // Filter transactions based on search term & decision selection
   const filteredTransactions = transactions.filter((tx) => {
@@ -83,11 +100,41 @@ export default function App() {
     return matchesSearch && matchesDecision;
   });
 
+  // Sort filtered transactions based on sortColumn and sortDirection
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    let valA = a[sortColumn];
+    let valB = b[sortColumn];
+
+    // Handle fallback for null or undefined values
+    if (valA === undefined || valA === null) valA = '';
+    if (valB === undefined || valB === null) valB = '';
+
+    // Date sorting for evaluation date
+    if (sortColumn === 'created_at') {
+      const timeA = new Date(valA.includes && valA.includes('T') ? valA : String(valA).replace(' ', 'T')).getTime() || 0;
+      const timeB = new Date(valB.includes && valB.includes('T') ? valB : String(valB).replace(' ', 'T')).getTime() || 0;
+      return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+    }
+
+    // Numerical sorting (amount, risk_score)
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    }
+
+    // String sorting (transaction_id, customer_email, decision)
+    const strA = String(valA).toLowerCase();
+    const strB = String(valB).toLowerCase();
+
+    if (strA < strB) return sortDirection === 'asc' ? -1 : 1;
+    if (strA > strB) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   // --- COMPUTE PAGINATED DATA SLICE ---
-  const totalRecords = filteredTransactions.length;
+  const totalRecords = sortedTransactions.length;
   const totalPages = Math.ceil(totalRecords / pageSize) || 1;
   const startIndex = (currentPage - 1) * pageSize;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + pageSize);
+  const paginatedTransactions = sortedTransactions.slice(startIndex, startIndex + pageSize);
 
   // 1. Show Loading State while Supabase checks session
   if (loading) {
@@ -226,13 +273,13 @@ export default function App() {
             <div className="p-10 max-w-6xl mx-auto space-y-8">
               <h1 className="text-2xl font-bold text-[#21005D]">Operations Desk</h1>
 
-              {/* --- DATABASE TRANSACTIONS TABLE WITH SEARCH, FILTER & PAGINATION --- */}
+              {/* --- DATABASE TRANSACTIONS TABLE WITH SEARCH, FILTER, SORT & PAGINATION --- */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-800">Recent Database Transactions</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Click any row to inspect deep risk factor metrics.</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Click any header arrow to sort. Click any row to inspect deep risk factor metrics.</p>
                   </div>
 
                   {/* Controls Container: Search Input & Decision Filters */}
@@ -278,14 +325,93 @@ export default function App() {
                 {/* Table View */}
                 <div className="overflow-x-auto rounded-t-lg border border-gray-200">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-[#E8DEF8] text-[#21005D]">
+                    <thead className="bg-[#E8DEF8] text-[#21005D] select-none">
                       <tr>
-                        <th className="p-4 font-semibold text-center">Evaluation Date</th>
-                        <th className="p-4 font-semibold text-center">Transaction ID</th>
-                        <th className="p-4 font-semibold text-center">User Email</th>
-                        <th className="p-4 font-semibold text-center">Amount</th>
-                        <th className="p-4 font-semibold text-center">Risk Score</th>
-                        <th className="p-4 font-semibold text-center">Decision</th>
+                        {/* 1. Evaluation Date */}
+                        <th 
+                          onClick={() => handleSort('created_at')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by Evaluation Date"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>Evaluation Date</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'created_at' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'created_at' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 2. Transaction ID */}
+                        <th 
+                          onClick={() => handleSort('transaction_id')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by Transaction ID"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>Transaction ID</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'transaction_id' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'transaction_id' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 3. User Email */}
+                        <th 
+                          onClick={() => handleSort('customer_email')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by User Email"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>User Email</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'customer_email' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'customer_email' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 4. Amount */}
+                        <th 
+                          onClick={() => handleSort('amount')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by Amount"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>Amount</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'amount' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'amount' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 5. Risk Score */}
+                        <th 
+                          onClick={() => handleSort('risk_score')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by Risk Score"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>Risk Score</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'risk_score' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'risk_score' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 6. Decision */}
+                        <th 
+                          onClick={() => handleSort('decision')}
+                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
+                          title="Click to sort by Decision"
+                        >
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span>Decision</span>
+                            <span className={`text-m transition-transform ${sortColumn === 'decision' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                              {sortColumn === 'decision' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
+                            </span>
+                          </div>
+                        </th>
+
+                        {/* 7. Action (Non-sortable) */}
                         <th className="p-4 font-semibold text-center">Action</th>
                       </tr>
                     </thead>
