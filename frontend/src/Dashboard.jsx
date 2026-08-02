@@ -42,7 +42,7 @@ export default function Dashboard({ transactions = [] }) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/v1/transactions/export?merchant_id=${user.id}&days=${days}`
+        `https://fraudflux.onrender.com/v1/transactions/export?merchant_id=${user.id}&days=${days}`
       );
 
       if (!response.ok) throw new Error('Failed to generate export report.');
