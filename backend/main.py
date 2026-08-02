@@ -73,7 +73,7 @@ def save_transaction_log(db_record: dict):
         print(f"Database error on background insert: {str(e)}")
 
 
-@app.post("/v1/charge/evaluate")
+@app.post("api/v1/charge/evaluate")
 async def evaluate_transaction(payload: TransactionPayload, background_tasks: BackgroundTasks):
     # 1. Fetch Dynamic Auto-Decline Threshold from 'merchants' table
     threshold = 85  # Fallback default
@@ -159,7 +159,7 @@ def get_transactions():
         return {"error": f"Failed to fetch from database: {str(e)}"}
 
 # 4. Update Merchant Threshold
-@app.put("/v1/settings/thresholds")
+@app.put("api/v1/settings/thresholds")
 async def update_merchant_threshold(payload: ThresholdUpdateSchema):
     try:
         response = supabase.table("merchants").update({
@@ -179,7 +179,7 @@ async def update_merchant_threshold(payload: ThresholdUpdateSchema):
         raise HTTPException(status_code=500, detail=str(e))
 
 # 5. Fetch Merchant Threshold
-@app.get("/v1/settings/thresholds/{merchant_id}")
+@app.get("api/v1/settings/thresholds/{merchant_id}")
 async def get_merchant_threshold(merchant_id: str):
     try:
         response = supabase.table("merchants").select("auto_decline_threshold").eq("id", merchant_id).single().execute()
@@ -190,7 +190,7 @@ async def get_merchant_threshold(merchant_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # 6. CSV Export Endpoint
-@app.get("/v1/transactions/export")
+@app.get("api/v1/transactions/export")
 async def export_transactions_csv(merchant_id: str, days: int = 30):
     try:
         cutoff_time = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
