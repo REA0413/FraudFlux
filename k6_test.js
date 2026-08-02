@@ -8,15 +8,16 @@ export const options = {
     { duration: '5s', target: 0 },   // Ramp down to 0
   ],
   thresholds: {
-    // 1. SLA Constraint: 95% of API calls must respond under 50ms
-    http_req_duration: ['p(95)<50'],
+    // 1. SLA Constraint: 95% of API calls respond under 1.5s over public internet to Render
+    http_req_duration: ['p(95)<1500'],
     // 2. Error Rate Constraint: Failure rate must stay below 1%
     http_req_failed: ['rate<0.01'],
   },
 };
 
 export default function () {
-  const url = 'http://127.0.0.1:8000/v1/charge/evaluate';
+  // Target Live Render Deployment Endpoint
+  const url = 'https://fraudflux.onrender.com/api/v1/charge/evaluate';
 
   // Generate dynamic transaction payloads
   const payload = JSON.stringify({
@@ -40,7 +41,7 @@ export default function () {
   // Assert response integrity
   check(res, {
     'status is 200': (r) => r.status === 200,
-    'decision returned': (r) => r.json().hasOwnProperty('decision'),
+    'decision returned': (r) => r.json() && r.json().hasOwnProperty('decision'),
   });
 
   sleep(0.1); // Small delay between virtual requests
