@@ -39,6 +39,7 @@ export default function App() {
   const [authView, setAuthView] = useState('landing'); // 'landing' | 'login' | 'register' | 'pricing'
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'operations' | 'settings' | 'simulator' | 'pricing'
   const [transactions, setTransactions] = useState([]);
+  const [isFetchingTxs, setIsFetchingTxs] = useState(true); // Track database fetch status
 
   // Operations Desk Search, Filter & Inspection Modal State
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,6 +59,7 @@ export default function App() {
     if (!user) return; // Only fetch if user is logged in
     
     const fetchTransactions = async () => {
+      setIsFetchingTxs(true);
       try {
         // Appended merchant_id to filter API results per authenticated merchant
         const response = await fetch(`https://fraudflux.onrender.com/api/v1/transactions?merchant_id=${user.id}`);
@@ -65,6 +67,8 @@ export default function App() {
         if (Array.isArray(data)) setTransactions(data);
       } catch (error) {
         console.error("Error fetching live transactions:", error);
+      } finally {
+        setIsFetchingTxs(false);
       }
     };
     fetchTransactions();
@@ -78,10 +82,8 @@ export default function App() {
   // Handle column header sorting click
   const handleSort = (columnKey) => {
     if (sortColumn === columnKey) {
-      // Toggle sort direction if clicking the active column
       setSortDirection((prevDir) => (prevDir === 'desc' ? 'asc' : 'desc'));
     } else {
-      // Set new active column with default descending direction
       setSortColumn(columnKey);
       setSortDirection('desc');
     }
@@ -105,23 +107,19 @@ export default function App() {
     let valA = a[sortColumn];
     let valB = b[sortColumn];
 
-    // Handle fallback for null or undefined values
     if (valA === undefined || valA === null) valA = '';
     if (valB === undefined || valB === null) valB = '';
 
-    // Date sorting for evaluation date
     if (sortColumn === 'created_at') {
       const timeA = new Date(valA.includes && valA.includes('T') ? valA : String(valA).replace(' ', 'T')).getTime() || 0;
       const timeB = new Date(valB.includes && valB.includes('T') ? valB : String(valB).replace(' ', 'T')).getTime() || 0;
       return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
     }
 
-    // Numerical sorting (amount, risk_score)
     if (typeof valA === 'number' && typeof valB === 'number') {
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     }
 
-    // String sorting (transaction_id, customer_email, decision)
     const strA = String(valA).toLowerCase();
     const strB = String(valB).toLowerCase();
 
@@ -145,7 +143,7 @@ export default function App() {
     );
   }
 
-  // 2. Show Public Pages (Landing, Login, Register, or Pricing) if User is NOT Authenticated
+  // 2. Show Public Pages if User is NOT Authenticated
   if (!user) {
     if (authView === 'login') {
       return (
@@ -175,7 +173,6 @@ export default function App() {
       );
     }
 
-    // Public Pricing view for non-authenticated visitors
     if (authView === 'pricing') {
       return (
         <div className="relative">
@@ -273,7 +270,6 @@ export default function App() {
             <div className="p-10 max-w-6xl mx-auto space-y-8">
               <h1 className="text-2xl font-bold text-[#21005D]">Operations Desk</h1>
 
-              {/* --- DATABASE TRANSACTIONS TABLE WITH SEARCH, FILTER, SORT & PAGINATION --- */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -282,7 +278,6 @@ export default function App() {
                     <p className="text-xs text-gray-500 mt-0.5">Click any header arrow to sort. Click any row to inspect deep risk factor metrics.</p>
                   </div>
 
-                  {/* Controls Container: Search Input & Decision Filters */}
                   <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                     
                     {/* Search Input */}
@@ -302,7 +297,7 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* Filter Pills (ALL / APPROVE / DECLINE) */}
+                    {/* Filter Pills */}
                     <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs">
                       {['ALL', 'APPROVE', 'DECLINE'].map((status) => (
                         <button
@@ -327,91 +322,60 @@ export default function App() {
                   <table className="w-full text-left text-sm">
                     <thead className="bg-[#E8DEF8] text-[#21005D] select-none">
                       <tr>
-                        {/* 1. Evaluation Date */}
-                        <th 
-                          onClick={() => handleSort('created_at')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by Evaluation Date"
-                        >
+                        <th onClick={() => handleSort('created_at')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>Evaluation Date</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'created_at' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'created_at' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'created_at' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 2. Transaction ID */}
-                        <th 
-                          onClick={() => handleSort('transaction_id')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by Transaction ID"
-                        >
+                        <th onClick={() => handleSort('transaction_id')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>Transaction ID</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'transaction_id' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'transaction_id' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'transaction_id' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 3. User Email */}
-                        <th 
-                          onClick={() => handleSort('customer_email')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by User Email"
-                        >
+                        <th onClick={() => handleSort('customer_email')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>User Email</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'customer_email' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'customer_email' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'customer_email' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 4. Amount */}
-                        <th 
-                          onClick={() => handleSort('amount')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by Amount"
-                        >
+                        <th onClick={() => handleSort('amount')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>Amount</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'amount' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'amount' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'amount' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 5. Risk Score */}
-                        <th 
-                          onClick={() => handleSort('risk_score')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by Risk Score"
-                        >
+                        <th onClick={() => handleSort('risk_score')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>Risk Score</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'risk_score' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'risk_score' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'risk_score' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 6. Decision */}
-                        <th 
-                          onClick={() => handleSort('decision')}
-                          className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors"
-                          title="Click to sort by Decision"
-                        >
+                        <th onClick={() => handleSort('decision')} className="p-4 font-semibold text-center cursor-pointer hover:bg-[#d8cceb] transition-colors">
                           <div className="inline-flex items-center gap-1.5 justify-center">
                             <span>Decision</span>
-                            <span className={`text-m transition-transform ${sortColumn === 'decision' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
+                            <span className={`text-xs ${sortColumn === 'decision' ? 'text-[#21005D] font-bold' : 'text-gray-400'}`}>
                               {sortColumn === 'decision' ? (sortDirection === 'desc' ? '↓' : '↑') : '↓'}
                             </span>
                           </div>
                         </th>
 
-                        {/* 7. Action (Non-sortable) */}
                         <th className="p-4 font-semibold text-center">Action</th>
                       </tr>
                     </thead>
@@ -456,12 +420,39 @@ export default function App() {
                         );
                       })}
 
+                      {/* --- CLEAR & HELPFUL EMPTY STATES --- */}
                       {paginatedTransactions.length === 0 && (
                         <tr>
-                          <td colSpan="7" className="p-12 text-center text-gray-500">
-                            {transactions.length === 0
-                              ? 'Loading live transaction data...'
-                              : 'No transactions match your search or filter criteria.'}
+                          <td colSpan="7" className="p-12 text-center">
+                            {isFetchingTxs ? (
+                              <div className="flex flex-col items-center justify-center space-y-2 text-gray-500">
+                                <span className="animate-spin text-xl">⏳</span>
+                                <span className="text-sm font-medium">Fetching merchant transaction logs...</span>
+                              </div>
+                            ) : transactions.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-4 space-y-3">
+                                <div className="w-12 h-12 rounded-full bg-purple-50 text-[#6750A4] flex items-center justify-center text-xl font-bold border border-purple-100">
+                                  💳
+                                </div>
+                                <div className="space-y-1">
+                                  <h3 className="text-base font-semibold text-gray-800">No Transactions Found for Your Account</h3>
+                                  <p className="text-xs text-gray-500 max-w-md">
+                                    Your database table is currently empty. Try running a test purchase under the <strong>Checkout Simulator</strong> tab to see your risk evaluation log populated here in real time.
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => setActiveTab('simulator')}
+                                  className="mt-2 text-xs font-semibold bg-[#6750A4] hover:bg-[#523d85] text-white px-4 py-2 rounded-lg transition-colors"
+                                >
+                                  Open Checkout Simulator →
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-gray-500 py-6">
+                                <p className="text-sm font-medium text-gray-700">No matching records</p>
+                                <p className="text-xs text-gray-400 mt-1">Try adjusting your search query or filter toggle buttons.</p>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -472,13 +463,11 @@ export default function App() {
                 {/* --- PAGINATION TOOLBAR --- */}
                 <div className="bg-gray-50 px-4 py-3 border border-t-0 border-gray-200 rounded-b-lg flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
                   <div className="flex items-center space-x-3">
-                    {/* Page Controls */}
                     <div className="flex items-center border border-gray-300 rounded-md bg-white shadow-sm overflow-hidden">
                       <button
                         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                         disabled={currentPage === 1}
                         className="px-2.5 py-1 hover:bg-gray-100 disabled:opacity-40 border-r border-gray-200 font-bold transition-colors"
-                        title="Previous Page"
                       >
                         ←
                       </button>
@@ -489,13 +478,11 @@ export default function App() {
                         onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                         disabled={currentPage === totalPages}
                         className="px-2.5 py-1 hover:bg-gray-100 disabled:opacity-40 border-l border-gray-200 font-bold transition-colors"
-                        title="Next Page"
                       >
                         →
                       </button>
                     </div>
 
-                    {/* Rows Per Page Selector */}
                     <select
                       value={pageSize}
                       onChange={(e) => {
@@ -508,11 +495,9 @@ export default function App() {
                       <option value={25}>25 rows</option>
                       <option value={50}>50 rows</option>
                       <option value={100}>100 rows</option>
-                      <option value={500}>500 rows</option>
                     </select>
                   </div>
 
-                  {/* Total Records Display */}
                   <div className="font-semibold text-gray-700">
                     {totalRecords} records
                   </div>
@@ -522,7 +507,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 3: RISK CONTROLS (SETTINGS) */}
+          {/* TAB 3: RISK CONTROLS */}
           {activeTab === 'settings' && (
             <div className="p-10 max-w-6xl mx-auto">
               <MerchantSettings />
@@ -536,7 +521,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 5: PRICING (AUTHENTICATED) */}
+          {/* TAB 5: PRICING */}
           {activeTab === 'pricing' && (
             <Pricing isAuthenticated={true} />
           )}
@@ -549,7 +534,6 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
             
-            {/* Modal Header */}
             <div className="bg-[#21005D] text-white p-6 flex justify-between items-center">
               <div>
                 <span className="text-xs font-semibold text-[#E8DEF8] uppercase tracking-wider">Transaction Inspection</span>
@@ -563,10 +547,8 @@ export default function App() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               
-              {/* Summary Bar */}
               <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 text-center">
                 <div>
                   <span className="text-xs text-gray-500 block">Amount</span>
@@ -598,12 +580,9 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Deep Risk Metrics Grid */}
               <div>
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Risk Factor Telemetry</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  
-                  {/* BIN / Issuer */}
                   <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm flex items-start space-x-3">
                     <div className="text-2xl">💳</div>
                     <div>
@@ -613,7 +592,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Country Match */}
                   <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm flex items-start space-x-3">
                     <div className="text-2xl">🌐</div>
                     <div>
@@ -625,7 +603,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Distance / Velocity */}
                   <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm flex items-start space-x-3">
                     <div className="text-2xl">📍</div>
                     <div>
@@ -639,7 +616,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Zip Code & Population Density */}
                   <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm flex items-start space-x-3">
                     <div className="text-2xl">🏙️</div>
                     <div>
@@ -654,7 +630,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Customer Info Footer */}
               <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-xs text-gray-500">
                 <span>Customer: <strong className="text-gray-800">{selectedTxModal.customer_email}</strong></span>
                 <span>Evaluated via XGBoost API</span>
@@ -662,7 +637,6 @@ export default function App() {
 
             </div>
 
-            {/* Modal Actions */}
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
                 onClick={() => setSelectedTxModal(null)}

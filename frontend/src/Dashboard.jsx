@@ -11,6 +11,8 @@ export default function Dashboard({ transactions = [] }) {
   const [days, setDays] = useState(30);
   const [downloading, setDownloading] = useState(false);
 
+  const hasData = transactions.length > 0;
+
   // 1. Format Bar Chart Data (Transaction Volume)
   const chartData = transactions.map(tx => ({
     name: tx.transaction_id,
@@ -87,8 +89,8 @@ export default function Dashboard({ transactions = [] }) {
 
               <button
                 onClick={handleExportCSV}
-                disabled={downloading}
-                className="text-[#6750A4] text-sm font-medium flex items-center hover:underline disabled:opacity-50"
+                disabled={downloading || !hasData}
+                className="text-[#6750A4] text-sm font-medium flex items-center hover:underline disabled:opacity-40 disabled:no-underline"
               >
                 {downloading ? 'Downloading...' : 'Download report overview (CSV)'}
               </button>
@@ -118,53 +120,74 @@ export default function Dashboard({ transactions = [] }) {
           </div>
           
           {/* Dynamic Bar Chart: Transaction Volume by ID */}
-          <div className="border border-gray-100 rounded-lg p-6 h-72 bg-white shadow-sm mb-8">
+          <div className="border border-gray-100 rounded-lg p-6 h-72 bg-white shadow-sm mb-8 relative">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Transaction Volume by ID</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `$${value}`} dx={-10} />
-                <Tooltip 
-                  cursor={{ fill: '#F3F4F6' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                  formatter={(value) => [`$${value}`, 'Amount']}
-                />
-                <Bar dataKey="amount" fill="#6750A4" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+            
+            {hasData ? (
+              <ResponsiveContainer width="100%" height="85%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `$${value}`} dx={-10} />
+                  <Tooltip 
+                    cursor={{ fill: '#F3F4F6' }}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    formatter={(value) => [`$${value}`, 'Amount']}
+                  />
+                  <Bar dataKey="amount" fill="#6750A4" radius={[4, 4, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-52 flex flex-col items-center justify-center text-center bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                <div className="text-3xl mb-2">📊</div>
+                <h4 className="text-sm font-semibold text-gray-800">No Processed Transaction Yet</h4>
+                <p className="text-xs text-gray-500 max-w-sm mt-1">
+                  Once your store starts processing transactions, dynamic order volume charts will populate here automatically.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Dynamic Decision Status Pie Chart & Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center border border-gray-100 rounded-xl p-6 bg-gray-50/50 shadow-sm">
             
             {/* Pie Chart Column (Spans 2 columns) */}
-            <div className="md:col-span-2 h-64">
-              <h3 className="text-sm font-bold text-gray-800 mb-2">Live Decision Status Breakdown</h3>
+            <div className="md:col-span-2 h-64 flex flex-col justify-center">
+              <h3 className="text-sm font-bold text-gray-800 mb-1">Live Decision Status Breakdown</h3>
               <p className="text-xs text-gray-500 mb-4">Real-time ratio of approved vs. declined transactions recorded in your database.</p>
               
-              <ResponsiveContainer width="100%" height="80%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => [`${value} Transactions`, 'Count']}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                  <Legend verticalAlign="bottom" height={36} />
-                </PieChart>
-              </ResponsiveContainer>
+              {hasData ? (
+                <ResponsiveContainer width="100%" height="80%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => [`${value} Transactions`, 'Count']}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 bg-white rounded-lg border border-dashed border-gray-200 text-center">
+                  <div className="text-2xl mb-1">🛡️</div>
+                  <p className="text-xs font-semibold text-gray-700">0 Transactions Recorded</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5 max-w-xs">
+                    Test your fraud scoring pipeline using the <strong>Checkout Simulator</strong> menu.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Quick Stat Summary Cards Column */}
